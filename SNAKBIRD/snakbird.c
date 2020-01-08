@@ -100,19 +100,19 @@ void renderSnake() {
 	}
 }
 
-int tryMove(int newDirn) {
-	int dirs[] = {
-		-16,1,16,-1
-	};
+int dirs[] = {
+	-16,1,16,-1
+};
 
+int tryMove(int newDirn) {
 	int newMapPos = snake[snakeHead] + dirs[newDirn];
 	if (map[newMapPos] != 0 && map[newMapPos] != 8)
 		return 0;
 
 	for (int i = snakeHead, j = 0; j < snakeLen; ++j) {
-		if (snake[i] == newMapPos)
+		if (newMapPos == snake[i])
 			return 0;
-		i = (i + 1) & 15;
+		i = (i - 1) & 15;
 	}
 
 	snakeHead = (snakeHead + 1) & 15;
