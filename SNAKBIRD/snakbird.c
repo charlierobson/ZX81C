@@ -1,4 +1,6 @@
 #include <stdio.h>
+#include <string.h>
+#include <input.h>
 
 typedef unsigned char byte;
 
@@ -21,8 +23,10 @@ enum
 char *display;
 extern int d_file @16396;
 
+byte undrawList[16];
+
 byte snake[16] = {0};
-int snakeHead, snakeTail, snakeFace, snakeLen;
+byte snakeHead, snakeTail, snakeFace, snakeLen;
 
 int tileMap[] = {
 	0,0,0,0,
@@ -52,7 +56,6 @@ byte gameMap[16*12] = {
 	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1
 };
 
-byte tempMap[16*12];
 
 void putBlock(int tile, int cellId) {
 	int cellX = cellId & 15;
@@ -70,23 +73,30 @@ void putBlock(int tile, int cellId) {
 }
 
 void renderMap() {
-	memcpy(tempMap, map, 16 * 12);
+	for (int i = 0; i < 16*12; ++i) {
+		putBlock(map[i], i);
+	}
+}
 
-	int i = snakeHead;
-	tempMap[snake[i]] = 4 + snakeFace;
+
+void renderSnake() {
+	int i = 0;
+	while (undrawList[i] != 0xff) {
+		putBlock(0, undrawList[i]);
+		++i;
+	}
+
+	i = snakeHead;
+	putBlock(4 + snakeFace, snake[i]);
 	i = (i - 1) & 15;
 
 	int n = snakeLen - 1;
 	int m = 0;
 	while (n) {
-		tempMap[snake[i]] = 2 + (m & 1);
+		putBlock(2 + (m & 1), snake[i]);
 		i = (i - 1) & 15;
 		--n;
 		++m;
-	}
-
-	for (i = 0; i < 16*12; ++i) {
-		putBlock(tempMap[i], i);
 	}
 }
 
@@ -99,11 +109,19 @@ int tryMove(int newDirn) {
 	if (map[newMapPos] != 0 && map[newMapPos] != 8)
 		return 0;
 
+	for (int i = snakeHead, j = 0; j < snakeLen; ++j) {
+		if (snake[i] == newMapPos)
+			return 0;
+		i = (i + 1) & 15;
+	}
+
 	snakeHead = (snakeHead + 1) & 15;
 	snake[snakeHead] = newMapPos;
 
 	if (map[newMapPos] == 0) {
 		// update tail if not moving on to fruit
+		undrawList[0] = snake[snakeTail];
+		undrawList[1] = 0xff;
 		snakeTail = (snakeTail + 1) & 15;
 	} else {
 		++snakeLen;
@@ -124,6 +142,8 @@ int checkFall() {
 	}
 
 	for (int i = 0, n = snakeTail; i < snakeLen; ++i) {
+		undrawList[i] = snake[n];
+		undrawList[i+1] = 0xff;
 		snake[n] = snake[n] + 16;
 		n = (n + 1) & 15;
 	}
@@ -141,13 +161,12 @@ int reset() {
 	snakeLen = 3;
 	snakeFace = 1; // U = 0, R, D, L
 	memcpy(map, gameMap, 16 * 12);
+	renderMap();
 }
 
 int getMove()
 {
-	int k;
-
-	k = in_Inkey();
+	int k = in_Inkey();
 	while (k != 0)
 	{
 		k = in_Inkey();
@@ -161,7 +180,7 @@ int getMove()
 		if (k == K_DOWN) return tryMove(DOWN);
 		if (k == K_LEFT) return tryMove(LEFT);
 		if (k == K_RIGHT) return tryMove(RIGHT);
-		if (k == K_RESET) return reset();
+		if (k == K_RESET) return renderMap();
 	}
 }
 
@@ -170,10 +189,12 @@ void main()
 	display = d_file+1;
 
 	reset();
-
+	undrawList[0] = 0xff;
 	while (1) {
-		renderMap();
-		if (checkFall()) continue;
+		renderSnake();
+		if (checkFall()) {
+			continue;
+		}
 		getMove();
 	}
 }
