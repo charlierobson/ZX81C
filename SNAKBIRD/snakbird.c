@@ -28,8 +28,6 @@ enum
 char *display;
 extern int d_file @16396;
 
-byte undrawList[16];
-
 byte snake[16] = {0};
 byte snakeHead, snakeTail, snakeFace, snakeLen, snakeDead;
 byte fruit, doorOpen;
@@ -54,7 +52,7 @@ int tileMap[] = {
 };
 
 byte map[16*13];
-byte gameMap[16*12] = {
+byte gameMap[16*13] = {
 	0,0,0,0,8,0,0,0,0,0,0,0,0,0,0,0,
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
@@ -64,6 +62,7 @@ byte gameMap[16*12] = {
 	0,0,0,0,0,0,0,0,0,0,0,0,0,9,0,0,
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 	0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
@@ -77,7 +76,7 @@ int doUpdateFn() {
 	return updateFn != NULL;
 }
 
-void putBlock(int tile, int cellId) {
+void putBlock(int cellId, int tile) {
 	int cellX = cellId & 15;
 	int cellY = cellId / 16;
 	char* cell = display + (cellX * 2) + (cellY * 66);
@@ -94,51 +93,63 @@ void putBlock(int tile, int cellId) {
 
 void renderMap() {
 	for (int i = 0; i < 16*12; ++i) {
-		putBlock(map[i], i);
+		putBlock(i, map[i]);
 	}
 }
 
+byte updateList[32];
+byte updateListCount;
 
-void renderSnake() {
-	int i = 0;
-	while (undrawList[i] != 0xff) {
-		putBlock(0, undrawList[i]);
-		++i;
+// update map and track which cells have changed for drawing
+void updateMap(int index, byte value) {
+	map[index] = value;
+
+	// only render a cell once
+	for (int i = 0; i < updateListCount; ++i) {
+		if (updateList[i] == index)
+			return;
 	}
 
-	i = snakeHead;
-	int x = snakeDead ? 11 : 4;
-	putBlock(snakeFace + x, snake[i]);
-	i = (i - 1) & 15;
+	updateList[updateListCount] = index;
+	++updateListCount;
+}
 
-	int n = snakeLen - 1;
-	int m = 0;
-	while (n) {
-		putBlock(2 + (m & 1), snake[i]);
-		i = (i - 1) & 15;
-		--n;
-		++m;
+
+void render() {
+	for (int i = 0; i < updateListCount; ++i) {
+		byte cell = updateList[i];
+		putBlock(cell, map[cell]);
 	}
+	updateListCount = 0;
 }
 
 void waiter(void) {
-	undrawList[0] = 0xff;
 	--levelComplete;
 	return 1;
+}
+
+void putSnakeInMap() {
+	int x = snakeDead ? 11 : 4;
+	updateMap(snake[snakeHead], snakeFace + x);
+	for (int i = 1, n = snakeHead; i < snakeLen; ++i) {
+		n = (n - 1) & 15;
+		updateMap(snake[n], 3 - (i & 1));
+	}
 }
 
 void exiting(void) {
 	int exited = 1;
 
-	undrawList[0] = snake[snakeTail];
-	undrawList[1] = 0xff;
-
+	// collapse all segments onto the head, counting how many segments are in one place
+	updateMap(snake[snakeTail], 0);
 	for (int i = 0; i < snakeLen - 1; ++i) {
 		snake[(snakeTail + i) & 15] = snake[(snakeTail + 1 + i) & 15];
 		if (snake[(snakeTail + i) & 15] == snake[snakeHead]) {
 			++exited;
 		}
 	}
+
+	putSnakeInMap();
 
 	if (exited == snakeLen) {
 		levelComplete = 20;
@@ -147,6 +158,7 @@ void exiting(void) {
 
 	return 1;
 }
+
 
 int dirs[] = {
 	-16,1,16,-1
@@ -160,60 +172,53 @@ int tryMove(int newDirn) {
 	if (map[newMapPos] == 9 && !doorOpen)
 		return 0;
 
-	for (int i = snakeHead, j = 0; j < snakeLen; ++j) {
-		if (newMapPos == snake[i])
-			return 0;
-		i = (i - 1) & 15;
-	}
-
+	snakeFace = newDirn;
 	snakeHead = (snakeHead + 1) & 15;
 	snake[snakeHead] = newMapPos;
 
 	if (map[newMapPos] != 8) {
 		// update tail if not moving on to fruit
-		undrawList[0] = snake[snakeTail];
-		undrawList[1] = 0xff;
+		updateMap(snake[snakeTail], 0);
 		snakeTail = (snakeTail + 1) & 15;
 	}
-	if (map[newMapPos] == 8) {
-		++snakeLen;
-		map[newMapPos] = 0;
-		--fruit;
-	} else if (map[newMapPos] == 9) {
-		updateFn = exiting;
-	}
 
-	snakeFace = newDirn;
+	if (map[newMapPos] == 8) {
+		// moved on to fruit, so grow
+		++snakeLen;
+		--fruit;
+	} else if (map[newMapPos] == 10)
+		updateFn = exiting;
+
+	putSnakeInMap();
 
 	return 1;
 }
 
 int checkFall() {
-	// if any segment is supported then nothing to do
 	for (int i = 0, n = snakeTail; i < snakeLen; ++i) {
-		if (map[snake[n] + 16] != 0)
-			return 0;
-		n = (n + 1) & 15;
-	}
-
-	// if any segment would go off screen then die
-	for (int i = 0, n = snakeTail; i < snakeLen; ++i) {
+		// if any segment would go off screen then die
 		if (snake[n] + 16 >= 16*12) {
 			snakeDead = 1;
 			levelComplete = 50;
 			updateFn = waiter;
 			return 1;
 		} 
+
+		// if any segment is supported by something other than yourself then nothing to do
+		if (gameMap[snake[n] + 16] != 0) // !!!!!!!!!!!!!!!!!!!!!! sort tile ids into ranges? then use tile id to indicate support
+			return 0;
+
 		n = (n + 1) & 15;
 	}
 
 	// none of the segments are supported so move them all down
 	for (int i = 0, n = snakeTail; i < snakeLen; ++i) {
-		undrawList[i] = snake[n];
-		undrawList[i+1] = 0xff;
+		updateMap(snake[n], 0);
 		snake[n] = snake[n] + 16;
 		n = (n + 1) & 15;
 	}
+
+	putSnakeInMap();
 
 	return 1;
 }
@@ -231,28 +236,37 @@ void openDoor() {
 	doorOpen = 1;
 	for (int i = 0; i < 16*12; ++i) {
 		if (map[i] == 9) {
-			putBlock(10, i);
+			updateMap(i, 10);
 			return;
 		}
 	}
 }
 
+void debugDisplay() {
+
+}
+
 int reset() {
+	snakeTail=0;
 	snake[0] = 6+16*7;
 	snake[1] = 7+16*7;
 	snake[2] = 8+16*7;
 	snakeHead=2;
-	snakeTail=0;
 	snakeLen = 3;
-	snakeFace = 1; // U = 0, R, D, L
+	snakeFace = 1;
+	snakeDead = 0;
+
 	doorOpen = 0;
 	levelComplete = 0;
-	snakeDead = 0;
+
 	updateFn = NULL;
+	updateListCount = 0;
+
 	memcpy(map, gameMap, 16 * 12);
 	memset(map + 16 * 12, 0, 16);
-	undrawList[0] = 0xff;
+
 	renderMap();
+	putSnakeInMap();
 	countFruit();
 }
 
@@ -283,7 +297,8 @@ void main()
 
 	reset();
 	while (levelComplete != 1) {
-		renderSnake();
+		debugDisplay();
+		render();
 		if (doUpdateFn()) {
 			continue;
 		}
