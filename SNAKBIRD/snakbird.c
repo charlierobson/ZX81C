@@ -79,10 +79,18 @@ int tileMap[] = {
 	0xbd,0x80,0x84,0x80,	// face left dead
 };
 
+#define A 0x80
+#define B 0x81
+#define C 0x82
+#define D 0x83
+#define E 0x84
+
 #define F T_FRUIT1
-#define D T_DOORCLOSED
+#define X T_DOORCLOSED
 
 const int MAPSIZE = 16*12;
+
+
 
 byte map[16*12];
 byte gameMap[] = {
@@ -92,27 +100,38 @@ byte gameMap[] = {
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 	0,0,0,0,0,0,0,0,F,0,0,0,0,0,0,0,
 	0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,
-	0,0,0,0,0,0,0,0,0,0,0,0,0,D,0,0,
-	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,0,0,0,X,0,0,
+	0,0,0,0,0,0,A,B,C,0,0,0,0,0,0,0,
 	0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-	6+16*7, 7+16*7, 8+16*7, 0, 0, 0, 0, RIGHT,
 
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-	0,0,0,0,0,0,0,D,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,X,0,0,0,0,0,0,0,0,
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 	0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,
 	0,0,0,0,F,0,0,1,F,1,0,0,0,0,0,0,
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-	0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,1,B,A,0,0,0,0,0,0,0,0,
 	0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-	7+16*7, 6+16*7, 0, 0, 0, 0, 0, LEFT,
+
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,X,0,0,0,0,0,0,0,
+	0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,
+	0,0,1,0,F,1,0,0,0,0,0,0,0,0,0,0,
+	0,0,1,0,0,1,0,0,0,A,0,0,0,0,0,0,
+	0,0,1,0,0,0,0,0,C,B,0,F,0,0,0,0,
+	0,0,1,1,1,1,1,1,1,1,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 
 };
 
@@ -197,7 +216,7 @@ void nextLevel(void) {
 	++udTimer;
 	if (udTimer == 100) {
 		++level;
-		level = level & 1;
+		level %= 3;
 		reset();
 	}
 }
@@ -355,19 +374,29 @@ int reset() {
 	setUpdateFn(snakeMove);
 	updateListCount = 0;
 
-	int levelOffset = level * (MAPSIZE + 8);
+	int levelOffset = level * MAPSIZE;
 	memcpy(map, gameMap + levelOffset, MAPSIZE);
 
 	snakeTail = 0;
-	snakeHead = 0xff;
+	snakeHead = 0;
 
-	for (int i = 0; gameMap[levelOffset + MAPSIZE + i] != 0; ++i) {
-		++snakeHead;
-		snake[snakeHead] = gameMap[levelOffset + MAPSIZE + i];
+	for (int i = 0; i < MAPSIZE; ++i) {
+		if (map[i] > 0x7f) {
+			byte n = map[i] - 0x80;
+			snake[n] = i;
+			if (n > snakeHead) {
+				snakeHead = n;
+			}
+		}
 	}
 
 	snakeLen = snakeHead + 1;
-	snakeFace = gameMap[levelOffset + MAPSIZE + 7];
+
+	snakeFace = snake[snakeHead] - snake[snakeHead - 1];
+	if (snakeFace == -1) snakeFace = LEFT;
+	else if (snakeFace == 1) snakeFace = RIGHT;
+	else if (snakeFace == -16) snakeFace = UP;
+	else snakeFace = DOWN;
 
 	countFruit();
 
