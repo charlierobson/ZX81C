@@ -9,6 +9,9 @@
 typedef unsigned char byte;
 typedef void(*UDFN)(void);
 
+char *display;
+extern int d_file @16396;
+
 #define K_UP       'Q'
 #define K_DOWN     'A'
 #define K_LEFT     'O'
@@ -24,14 +27,9 @@ enum
 	RESET
 };
 
-
-char *display;
-extern int d_file @16396;
-
 byte snake[16] = {0};
 byte snakeHead, snakeTail, snakeFace, snakeLen, snakeDead;
 byte fruit, doorOpen;
-byte levelComplete;
 
 enum {
 	T_EMPTY,
@@ -57,7 +55,7 @@ enum {
 };
 
 int tileMap[] = {
-	0,0,0,0,
+	0,0,0,0,				// air
 
 	0x8a,0x8a,0x80,0x80,	// ground
 
@@ -77,8 +75,6 @@ int tileMap[] = {
 	0x80,0xbd,0x80,0x07,	// face right dead
 	0x80,0x80,0xbd,0x07,	// face down dead
 	0xbd,0x80,0x84,0x80,	// face left dead
-
-
 };
 
 #define F T_FRUIT1
@@ -100,13 +96,7 @@ byte gameMap[16*12] = {
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 };
 
-UDFN updateFn;
-int doUpdateFn() {
-	if (updateFn) {
-		updateFn();
-	}
-	return updateFn != NULL;
-}
+
 
 void putBlock(int cellId, int tile) {
 	int cellX = cellId & 15;
@@ -123,16 +113,17 @@ void putBlock(int cellId, int tile) {
 	cell[34] = tileMap[ci];
 }
 
+
 void renderMap() {
 	for (int i = 0; i < 16*12; ++i) {
 		putBlock(i, map[i]);
 	}
 }
 
-byte updateList[32];
-byte updateListCount;
 
 // update map and track which cells have changed for drawing
+byte updateList[32];
+byte updateListCount;
 void updateMap(int index, byte value) {
 	map[index] = value;
 
@@ -147,7 +138,7 @@ void updateMap(int index, byte value) {
 }
 
 
-void render() {
+void renderUpdates() {
 	for (int i = 0; i < updateListCount; ++i) {
 		byte cell = updateList[i];
 		putBlock(cell, map[cell]);
@@ -155,10 +146,6 @@ void render() {
 	updateListCount = 0;
 }
 
-void waiter(void) {
-	--levelComplete;
-	return 1;
-}
 
 void putSnakeInMap() {
 	int x = snakeDead ? T_DEADFACEUP : T_FACEUP;
@@ -168,6 +155,41 @@ void putSnakeInMap() {
 		updateMap(snake[n], T_SNAKEBOD2 - (i & 1));
 	}
 }
+
+
+int udTimer;
+UDFN updateFn;
+int doUpdateFn() {
+	if (updateFn) {
+		updateFn();
+	}
+	return updateFn != NULL;
+}
+
+
+void setUpdateFn(UDFN fn) {
+	udTimer = 0;
+	updateFn = fn;
+}
+
+
+void nextLevel(void) {
+	++udTimer;
+	if (udTimer == 100) {
+		reset();
+	}
+}
+
+
+void death(void) {
+	snakeDead = 1;
+
+	++udTimer;
+	if (udTimer == 100) {
+		reset();
+	}
+}
+
 
 void exiting(void) {
 	int exited = 1;
@@ -181,14 +203,32 @@ void exiting(void) {
 		}
 	}
 
-//	putSnakeInMap();
-
 	if (exited == snakeLen) {
-		levelComplete = 20;
-		updateFn = waiter;
+		setUpdateFn(nextLevel);
 	}
 
 	return 1;
+}
+
+
+void countFruit() {
+	fruit = 0;
+	for (int i = 0; i < 16*12; ++i) {
+		if (map[i] == T_FRUIT1) {
+			++fruit;
+		}
+	}
+}
+
+
+void openDoor() {
+	doorOpen = 1;
+	for (int i = 0; i < 16*12; ++i) {
+		if (map[i] == T_DOORCLOSED) {
+			updateMap(i, T_DOOROPEN);
+			return;
+		}
+	}
 }
 
 
@@ -200,6 +240,32 @@ int isTraversible(byte blockType) {
 		if (blockType == traversable[i]) return 1;
 	}
 	return 0;
+}
+
+
+int checkFall() {
+	for (int i = 0, n = snakeTail; i < snakeLen; ++i) {
+		// if any segment would go off screen then die
+		if (snake[n] + 16 >= 16*12) {
+			setUpdateFn(death);
+			return 1;
+		} 
+
+		// if any segment is supported by something other than yourself then nothing to do
+		if (map[snake[n] + 16] > 0 && map[snake[n] + 16] < T_SNAKEBOD1)
+			return 0;
+
+		n = (n + 1) & 15;
+	}
+
+	// none of the segments are supported so move them all down
+	for (int i = 0, n = snakeTail; i < snakeLen; ++i) {
+		updateMap(snake[n], T_EMPTY);
+		snake[n] = snake[n] + 16;
+		n = (n + 1) & 15;
+	}
+
+	return 1;
 }
 
 
@@ -226,90 +292,20 @@ int tryMove(int newDirn) {
 		++snakeLen;
 		--fruit;
 	} else if (map[newMapPos] == T_DOOROPEN)
-		updateFn = exiting;
+		setUpdateFn(exiting);
 
-//	putSnakeInMap();
+	if (!doorOpen && !fruit) {
+		openDoor();
+	}
 
 	return 1;
 }
 
-int checkFall() {
-	for (int i = 0, n = snakeTail; i < snakeLen; ++i) {
-		// if any segment would go off screen then die
-		if (snake[n] + 16 >= 16*12) {
-			snakeDead = 1;
-			levelComplete = 50;
-			updateFn = waiter;
-			//putSnakeInMap();
-			return 1;
-		} 
 
-		// if any segment is supported by something other than yourself then nothing to do
-		if (gameMap[snake[n] + 16] && gameMap[snake[n] + 16] < T_SNAKEBOD1)
-			return 0;
+void snakeMove() {
+	if (checkFall())
+		return;
 
-		n = (n + 1) & 15;
-	}
-
-	// none of the segments are supported so move them all down
-	for (int i = 0, n = snakeTail; i < snakeLen; ++i) {
-		updateMap(snake[n], T_EMPTY);
-		snake[n] = snake[n] + 16;
-		n = (n + 1) & 15;
-	}
-
-	//putSnakeInMap();
-
-	return 1;
-}
-
-void countFruit() {
-	fruit = 0;
-	for (int i = 0; i < 16*12; ++i) {
-		if (map[i] == T_FRUIT1) {
-			++fruit;
-		}
-	}
-}
-
-void openDoor() {
-	doorOpen = 1;
-	for (int i = 0; i < 16*12; ++i) {
-		if (map[i] == T_DOORCLOSED) {
-			updateMap(i, T_DOOROPEN);
-			return;
-		}
-	}
-}
-
-void debugDisplay() {
-
-}
-
-int reset() {
-	snakeTail = 0;
-	snake[0] = 6+16*7;
-	snake[1] = 7+16*7;
-	snake[2] = 8+16*7;
-	snakeHead = 2;
-	snakeLen = 3;
-	snakeFace = 1;
-	snakeDead = 0;
-
-	doorOpen = 0;
-	levelComplete = 0;
-
-	updateFn = NULL;
-	updateListCount = 0;
-
-	memcpy(map, gameMap, 16 * 12);
-
-	renderMap();
-	countFruit();
-}
-
-int getMove()
-{
 	int k = in_Inkey();
 	while (k != 0)
 	{
@@ -329,24 +325,38 @@ int getMove()
 }
 
 
+int reset() {
+	snakeTail = 0;
+	snake[0] = 6+16*7;
+	snake[1] = 7+16*7;
+	snake[2] = 8+16*7;
+	snakeHead = 2;
+	snakeLen = 3;
+	snakeFace = 1;
+	snakeDead = 0;
+
+	doorOpen = 0;
+
+	setUpdateFn(snakeMove);
+	updateListCount = 0;
+
+	memcpy(map, gameMap, 16 * 12);
+
+	countFruit();
+
+	putSnakeInMap();
+	renderMap();
+}
+
+
 void main()
 {
 	display = d_file + 1;
 
 	reset();
-	while (levelComplete != 1) {
+	while(1) {
 		putSnakeInMap();
-		render();
-		if (doUpdateFn()) {
-			continue;
-		}
-		if (checkFall()) {
-			continue;
-		}
-		getMove();
-
-		if (!doorOpen && !fruit) {
-			openDoor();
-		}
+		renderUpdates();
+		doUpdateFn();
 	}
 }
