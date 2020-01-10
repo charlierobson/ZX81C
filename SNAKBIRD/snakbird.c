@@ -31,6 +31,8 @@ byte snake[16] = {0};
 byte snakeHead, snakeTail, snakeFace, snakeLen, snakeDead;
 byte fruit, doorOpen;
 
+int level;
+
 enum {
 	T_EMPTY,
 
@@ -80,20 +82,38 @@ int tileMap[] = {
 #define F T_FRUIT1
 #define D T_DOORCLOSED
 
+const int MAPSIZE = 16*12;
+
 byte map[16*12];
-byte gameMap[16*12] = {
+byte gameMap[] = {
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 	0,0,0,F,0,0,0,0,0,0,0,0,0,0,0,0,
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-	0,0,0,0,0,0,0,0,0,F,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,F,0,0,0,0,0,0,0,
 	0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,
 	0,0,0,0,0,0,0,0,0,0,0,0,0,D,0,0,
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 	0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	6+16*7, 7+16*7, 8+16*7, 0, 0, 0, 0, RIGHT,
+
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,D,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,F,0,0,1,F,1,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	7+16*7, 6+16*7, 0, 0, 0, 0, 0, LEFT,
+
 };
 
 
@@ -115,7 +135,7 @@ void putBlock(int cellId, int tile) {
 
 
 void renderMap() {
-	for (int i = 0; i < 16*12; ++i) {
+	for (int i = 0; i < MAPSIZE; ++i) {
 		putBlock(i, map[i]);
 	}
 }
@@ -176,6 +196,8 @@ void setUpdateFn(UDFN fn) {
 void nextLevel(void) {
 	++udTimer;
 	if (udTimer == 100) {
+		++level;
+		level = level & 1;
 		reset();
 	}
 }
@@ -197,14 +219,15 @@ void exiting(void) {
 	// collapse all segments onto the head, counting how many segments are in one place
 	updateMap(snake[snakeTail], T_EMPTY);
 	for (int i = 0; i < snakeLen - 1; ++i) {
-		snake[(snakeTail + i) & 15] = snake[(snakeTail + 1 + i) & 15];
 		if (snake[(snakeTail + i) & 15] == snake[snakeHead]) {
 			++exited;
 		}
+		snake[(snakeTail + i) & 15] = snake[(snakeTail + 1 + i) & 15];
 	}
 
 	if (exited == snakeLen) {
 		setUpdateFn(nextLevel);
+		updateMap(snake[snakeHead], T_DOORCLOSED);
 	}
 
 	return 1;
@@ -213,7 +236,7 @@ void exiting(void) {
 
 void countFruit() {
 	fruit = 0;
-	for (int i = 0; i < 16*12; ++i) {
+	for (int i = 0; i < MAPSIZE; ++i) {
 		if (map[i] == T_FRUIT1) {
 			++fruit;
 		}
@@ -223,7 +246,7 @@ void countFruit() {
 
 void openDoor() {
 	doorOpen = 1;
-	for (int i = 0; i < 16*12; ++i) {
+	for (int i = 0; i < MAPSIZE; ++i) {
 		if (map[i] == T_DOORCLOSED) {
 			updateMap(i, T_DOOROPEN);
 			return;
@@ -246,7 +269,7 @@ int isTraversible(byte blockType) {
 int checkFall() {
 	for (int i = 0, n = snakeTail; i < snakeLen; ++i) {
 		// if any segment would go off screen then die
-		if (snake[n] + 16 >= 16*12) {
+		if (snake[n] + 16 >= MAPSIZE) {
 			setUpdateFn(death);
 			return 1;
 		} 
@@ -326,21 +349,25 @@ void snakeMove() {
 
 
 int reset() {
-	snakeTail = 0;
-	snake[0] = 6+16*7;
-	snake[1] = 7+16*7;
-	snake[2] = 8+16*7;
-	snakeHead = 2;
-	snakeLen = 3;
-	snakeFace = 1;
 	snakeDead = 0;
-
 	doorOpen = 0;
 
 	setUpdateFn(snakeMove);
 	updateListCount = 0;
 
-	memcpy(map, gameMap, 16 * 12);
+	int levelOffset = level * (MAPSIZE + 8);
+	memcpy(map, gameMap + levelOffset, MAPSIZE);
+
+	snakeTail = 0;
+	snakeHead = 0xff;
+
+	for (int i = 0; gameMap[levelOffset + MAPSIZE + i] != 0; ++i) {
+		++snakeHead;
+		snake[snakeHead] = gameMap[levelOffset + MAPSIZE + i];
+	}
+
+	snakeLen = snakeHead + 1;
+	snakeFace = gameMap[levelOffset + MAPSIZE + 7];
 
 	countFruit();
 
@@ -352,6 +379,8 @@ int reset() {
 void main()
 {
 	display = d_file + 1;
+
+	level = 0;
 
 	reset();
 	while(1) {
