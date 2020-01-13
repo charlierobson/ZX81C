@@ -7,7 +7,6 @@
 #include <input.h>
 
 typedef unsigned char byte;
-typedef void(*UDFN)(void);
 
 char *_display;
 extern int D_FILE @16396;
@@ -33,8 +32,9 @@ typedef struct {
 	byte head, tail, face, length, isDead;
 } snake_t;
 
-snake_t _snake;
+snake_t _snake1;
 
+typedef void(*UDFN)(snake_t*);
 
 int _level;
 int _levelCount;
@@ -210,20 +210,20 @@ void renderUpdates() {
 // game update function handler
 int _udTimer;
 UDFN _updateFn;
-int doUpdateFn() {
+int doUpdateFn(snake_t* snake) {
 	if (_updateFn) {
-		_updateFn();
+		_updateFn(snake);
 	}
 	return _updateFn != NULL;
 }
 
 
-void putSnakeInMap() {
-	if (!_snake.isDead) {
-		updateMap(_snake.segs[_snake.head], _snake.face + T_FACEUP);
-		for (int i = 1, n = _snake.head; i < _snake.length; ++i) {
+void putSnakeInMap(snake_t* snake) {
+	if (!snake->isDead) {
+		updateMap(snake->segs[snake->head], snake->face + T_FACEUP);
+		for (int i = 1, n = snake->head; i < snake->length; ++i) {
 			n = (n - 1) & 15;
-			updateMap(_snake.segs[n], T_SNAKEBOD2 - (i & 1));
+			updateMap(snake->segs[n], T_SNAKEBOD2 - (i & 1));
 		}
 	} else {
 		int phase = _udTimer / 10;
@@ -233,34 +233,34 @@ void putSnakeInMap() {
 			case 2:
 			case 3:
 			{
-				int x = _snake.isDead ? T_DEADFACEUP : T_FACEUP;
-				updateMap(_snake.segs[_snake.head], _snake.face + x);
-				for (int i = 1, n = _snake.head; i < _snake.length; ++i) {
+				int x = snake->isDead ? T_DEADFACEUP : T_FACEUP;
+				updateMap(snake->segs[snake->head], snake->face + x);
+				for (int i = 1, n = snake->head; i < snake->length; ++i) {
 					n = (n - 1) & 15;
-					updateMap(_snake.segs[n], T_SNAKEBOD2 - (i & 1));
+					updateMap(snake->segs[n], T_SNAKEBOD2 - (i & 1));
 				}
 			}
 			break;
 			case 4:
 			{
-				for (int i = 0, n = _snake.head; i < _snake.length; ++i) {
-					updateMap(_snake.segs[n], T_BODDEAD1);
+				for (int i = 0, n = snake->head; i < snake->length; ++i) {
+					updateMap(snake->segs[n], T_BODDEAD1);
 					n = (n - 1) & 15;
 				}
 			}
 			break;
 			case 5:
 			{
-				for (int i = 0, n = _snake.head; i < _snake.length; ++i) {
-					updateMap(_snake.segs[n], T_BODDEAD2);
+				for (int i = 0, n = snake->head; i < snake->length; ++i) {
+					updateMap(snake->segs[n], T_BODDEAD2);
 					n = (n - 1) & 15;
 				}
 			}
 			break;
 			default:
 			{
-				for (int i = 0, n = _snake.head; i < _snake.length; ++i) {
-					updateMap(_snake.segs[n], T_EMPTY);
+				for (int i = 0, n = snake->head; i < snake->length; ++i) {
+					updateMap(snake->segs[n], T_EMPTY);
 					n = (n - 1) & 15;
 				}
 			}
@@ -287,8 +287,8 @@ void nextLevel(void) {
 }
 
 
-void death(void) {
-	_snake.isDead = 1;
+void death(snake_t* snake) {
+	snake->isDead = 1;
 
 	++_udTimer;
 	if (_udTimer == 100) {
@@ -297,21 +297,21 @@ void death(void) {
 }
 
 
-void exiting(void) {
+void exiting(snake_t* snake) {
 	int exited = 1;
 
 	// collapse all segments onto the head, counting how many segments are in one place
-	updateMap(_snake.segs[_snake.tail], T_EMPTY);
-	for (int i = 0; i < _snake.length - 1; ++i) {
-		if (_snake.segs[(_snake.tail + i) & 15] == _snake.segs[_snake.head]) {
+	updateMap(snake->segs[snake->tail], T_EMPTY);
+	for (int i = 0; i < snake->length - 1; ++i) {
+		if (snake->segs[(snake->tail + i) & 15] == snake->segs[snake->head]) {
 			++exited;
 		}
-		_snake.segs[(_snake.tail + i) & 15] = _snake.segs[(_snake.tail + 1 + i) & 15];
+		snake->segs[(snake->tail + i) & 15] = snake->segs[(snake->tail + 1 + i) & 15];
 	}
 
-	if (exited == _snake.length) {
+	if (exited == snake->length) {
 		setUpdateFn(nextLevel);
-		updateMap(_snake.segs[_snake.head], T_DOORCLOSED);
+		updateMap(snake->segs[snake->head], T_DOORCLOSED);
 	}
 
 	return 1;
@@ -350,16 +350,16 @@ int isTraversible(byte blockType) {
 }
 
 
-int checkFall() {
-	for (int i = 0, n = _snake.tail; i < _snake.length; ++i) {
+int checkFall(snake_t* snake) {
+	for (int i = 0, n = snake->tail; i < snake->length; ++i) {
 		// if any segment would go off screen then die
-		if (_snake.segs[n] + 16 >= MAPSIZE) {
+		if (snake->segs[n] + 16 >= MAPSIZE) {
 			setUpdateFn(death);
 			return 1;
 		} 
 
 		// if any segment is supported by something solid other than another segment then nothing to do
-		if (_map[_snake.segs[n] + 16] > T_SPIKES && _map[_snake.segs[n] + 16] < T_SNAKEBOD1)
+		if (_map[snake->segs[n] + 16] > T_SPIKES && _map[snake->segs[n] + 16] < T_SNAKEBOD1)
 			return 0;
 
 		n = (n + 1) & 15;
@@ -367,9 +367,9 @@ int checkFall() {
 
 	// we would be falling so check for hazards
 
-	for (int i = 0, n = _snake.tail; i < _snake.length; ++i) {
+	for (int i = 0, n = snake->tail; i < snake->length; ++i) {
 		// if any segment would go into spikes then die
-		if (_map[_snake.segs[n] + 16] == T_SPIKES) {
+		if (_map[snake->segs[n] + 16] == T_SPIKES) {
 			setUpdateFn(death);
 			return 1;
 		} 
@@ -379,9 +379,9 @@ int checkFall() {
 
 
 	// none of the segments are supported so move them all down
-	for (int i = 0, n = _snake.tail; i < _snake.length; ++i) {
-		updateMap(_snake.segs[n], T_EMPTY);
-		_snake.segs[n] = _snake.segs[n] + 16;
+	for (int i = 0, n = snake->tail; i < snake->length; ++i) {
+		updateMap(snake->segs[n], T_EMPTY);
+		snake->segs[n] = snake->segs[n] + 16;
 		n = (n + 1) & 15;
 	}
 
@@ -389,28 +389,28 @@ int checkFall() {
 }
 
 
-int tryMove(int newDirn) {
+int tryMove(snake_t* snake, int newDirn) {
 	const int _dirs[] = {
 		-16,1,16,-1
 	};
 
-	int newMapPos = _snake.segs[_snake.head] + _dirs[newDirn];
+	int newMapPos = snake->segs[snake->head] + _dirs[newDirn];
 	if (!isTraversible(_map[newMapPos]))
 		return 0;
 
-	_snake.face = newDirn;
-	_snake.head = (_snake.head + 1) & 15;
-	_snake.segs[_snake.head] = newMapPos;
+	snake->face = newDirn;
+	snake->head = (snake->head + 1) & 15;
+	snake->segs[snake->head] = newMapPos;
 
 	if (_map[newMapPos] != T_FRUIT1) {
 		// update tail if not moving on to _fruitCount
-		updateMap(_snake.segs[_snake.tail], T_EMPTY);
-		_snake.tail = (_snake.tail + 1) & 15;
+		updateMap(snake->segs[snake->tail], T_EMPTY);
+		snake->tail = (snake->tail + 1) & 15;
 	}
 
 	if (_map[newMapPos] == T_FRUIT1) {
 		// moved on to _fruitCount, so grow
-		++_snake.length;
+		++snake->length;
 		--_fruitCount;
 	} else if (_map[newMapPos] == T_DOOROPEN)
 		setUpdateFn(exiting);
@@ -423,8 +423,8 @@ int tryMove(int newDirn) {
 }
 
 
-void snakeMove() {
-	if (checkFall())
+void snakeMove(snake_t* snake) {
+	if (checkFall(snake))
 		return;
 
 	int k = in_Inkey();
@@ -437,46 +437,49 @@ void snakeMove() {
 	{
 		k = in_Inkey();
 
-		if (k == K_UP) return tryMove(UP);
-		if (k == K_DOWN) return tryMove(DOWN);
-		if (k == K_LEFT) return tryMove(LEFT);
-		if (k == K_RIGHT) return tryMove(RIGHT);
+		if (k == K_UP) return tryMove(snake, UP);
+		if (k == K_DOWN) return tryMove(snake, DOWN);
+		if (k == K_LEFT) return tryMove(snake, LEFT);
+		if (k == K_RIGHT) return tryMove(snake, RIGHT);
 		if (k == K_RESET) return reset(_level);
 	}
 }
 
 
 int reset(int level) {
+	snake_t* snake = _snake1;
+
 	_level = level;
 	_doorIsOpen = 0;
 
 	_updateListCount = 0;
 
-	_snake.isDead = 0;
+
+	snake->isDead = 0;
 
 	setUpdateFn(snakeMove);
 
 	int levelOffset = _level * MAPSIZE;
 	memcpy(_map, _gameMap + levelOffset, MAPSIZE);
 
-	_snake.length = 0;
+	snake->length = 0;
 	for (int i = 0; i < MAPSIZE; ++i) {
 		if (_map[i] > 0x7f) {
-			_snake.segs[(0x80 - _map[i]) & 15] = i;
-			++_snake.length;
+			snake->segs[(0x80 - _map[i]) & 15] = i;
+			++snake->length;
 		}
 	}
-	_snake.head = 0;
-	_snake.tail = 17 - _snake.length;
-	_snake.face = _snake.segs[0] - _snake.segs[15];
-	if (_snake.face == -1) _snake.face = LEFT;
-	else if (_snake.face == 1) _snake.face = RIGHT;
-	else if (_snake.face == -16) _snake.face = UP;
-	else _snake.face = DOWN;
+	snake->head = 0;
+	snake->tail = 17 - snake->length;
+	snake->face = snake->segs[0] - snake->segs[15];
+	if (snake->face == -1) snake->face = LEFT;
+	else if (snake->face == 1) snake->face = RIGHT;
+	else if (snake->face == -16) snake->face = UP;
+	else snake->face = DOWN;
 
 	countFruit();
 
-	putSnakeInMap();
+	putSnakeInMap(_snake1);
 	renderMap();
 }
 
@@ -490,8 +493,8 @@ void main()
 	reset(0);
 
 	while(1) {
-		putSnakeInMap();
+		putSnakeInMap(_snake1);
 		renderUpdates();
-		doUpdateFn();
+		doUpdateFn(_snake1);
 	}
 }
