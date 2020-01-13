@@ -8,6 +8,8 @@
 
 typedef unsigned char byte;
 
+void reset(int level);
+
 char *_display;
 extern int D_FILE @16396;
 
@@ -442,10 +444,10 @@ int tryMove(snake_t* snake, int newDirn) {
 
 snake_t* _activeSnake;
 void swapSnakes() {
-	if (_activeSnake == _snake1 && _snake2.length != 0) {
-		_activeSnake = _snake2;
+	if (_activeSnake == &_snake1 && _snake2.length != 0) {
+		_activeSnake = &_snake2;
 	} else
-		_activeSnake = _snake1;
+		_activeSnake = &_snake1;
 }
 
 
@@ -496,13 +498,13 @@ void initialiseSnake(snake_t* snake) {
 }
 
 
-int reset(int level) {
+void reset(int level) {
 	_level = level;
 	_doorIsOpen = 0;
 
 	_updateListCount = 0;
 
-	_activeSnake = _snake1;
+	_activeSnake = &_snake1;
 
 	setUpdateFn(snakeMove);
 
@@ -515,7 +517,7 @@ int reset(int level) {
 	countFruit();
 
 	putSnakeInMap(_snake1);
-	if (_snake2->length) putSnakeInMap(_snake2);
+	if (_snake2.length) putSnakeInMap(_snake2);
 
 	renderMap();
 }
@@ -523,7 +525,7 @@ int reset(int level) {
 
 void main()
 {
-	_display = D_FILE + 1;
+	_display = (char*)(D_FILE + 1);
 
 	_snake1.id = 0x40;
 	_snake2.id = 0x80;
