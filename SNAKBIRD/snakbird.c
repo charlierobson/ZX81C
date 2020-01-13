@@ -36,8 +36,9 @@ int level;
 enum {
 	T_EMPTY,
 
-	T_GROUND1,
 	T_SPIKES,
+
+	T_GROUND1,
 
 	T_FRUIT1,
 	T_DOORCLOSED,
@@ -53,6 +54,8 @@ enum {
 	T_DEADFACERIGHT,
 	T_DEADFACEDOWN,
 	T_DEADFACELEFT,
+	T_BODDEAD1,
+	T_BODDEAD2,
 
 	T_LAST
 };
@@ -60,8 +63,8 @@ enum {
 int tileMap[] = {
 	0,0,0,0,				// air
 
+	0x3d,0x3d,0x3d,0x3d,	// spikes
 	0x8a,0x8a,0x80,0x80,	// ground
-	0x17,0x17,0x17,0x17,	// spikes
 
 	0x81,0x82,0x84,0x07,	// 'fruit'
 	0x87,0x04,0x02,0x01,	// door, closed
@@ -79,6 +82,9 @@ int tileMap[] = {
 	0x80,0xbd,0x80,0x07,	// face right dead
 	0x80,0x80,0xbd,0x07,	// face down dead
 	0xbd,0x80,0x84,0x80,	// face left dead
+
+	0x17,0x17,0x17,0x17,	// bod dead 1
+	0x1b,0x1b,0x1b,0x1b,	// bod dead 2
 };
 
 #define A 0x80
@@ -101,8 +107,8 @@ byte gameMap[] = {
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 	0,0,0,0,0,0,0,0,F,0,0,0,0,0,0,0,
-	0,0,V,0,M,M,M,M,0,0,0,0,0,0,0,0,
-	0,0,0,0,0,0,0,0,0,0,0,0,0,X,0,0,
+	0,0,0,0,M,M,M,M,0,0,0,0,0,0,0,0,
+	0,0,V,V,V,0,0,0,0,0,0,0,0,X,0,0,
 	0,0,0,0,0,0,C,B,A,0,0,0,0,0,0,0,
 	0,0,0,0,0,0,M,M,M,M,0,0,0,0,0,0,
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
@@ -188,16 +194,6 @@ void renderUpdates() {
 }
 
 
-void putSnakeInMap() {
-	int x = snakeDead ? T_DEADFACEUP : T_FACEUP;
-	updateMap(snake[snakeHead], snakeFace + x);
-	for (int i = 1, n = snakeHead; i < snakeLen; ++i) {
-		n = (n - 1) & 15;
-		updateMap(snake[n], T_SNAKEBOD2 - (i & 1));
-	}
-}
-
-
 int udTimer;
 UDFN updateFn;
 int doUpdateFn() {
@@ -206,6 +202,59 @@ int doUpdateFn() {
 	}
 	return updateFn != NULL;
 }
+
+
+void putSnakeInMap() {
+	if (!snakeDead) {
+		updateMap(snake[snakeHead], snakeFace + T_FACEUP);
+		for (int i = 1, n = snakeHead; i < snakeLen; ++i) {
+			n = (n - 1) & 15;
+			updateMap(snake[n], T_SNAKEBOD2 - (i & 1));
+		}
+	} else {
+		int phase = udTimer / 10;
+		switch(phase) {
+			case 0:
+			case 1:
+			case 2:
+			case 3:
+			{
+				int x = snakeDead ? T_DEADFACEUP : T_FACEUP;
+				updateMap(snake[snakeHead], snakeFace + x);
+				for (int i = 1, n = snakeHead; i < snakeLen; ++i) {
+					n = (n - 1) & 15;
+					updateMap(snake[n], T_SNAKEBOD2 - (i & 1));
+				}
+			}
+			break;
+			case 4:
+			{
+				for (int i = 0, n = snakeHead; i < snakeLen; ++i) {
+					updateMap(snake[n], T_BODDEAD1);
+					n = (n - 1) & 15;
+				}
+			}
+			break;
+			case 5:
+			{
+				for (int i = 0, n = snakeHead; i < snakeLen; ++i) {
+					updateMap(snake[n], T_BODDEAD2);
+					n = (n - 1) & 15;
+				}
+			}
+			break;
+			default:
+			{
+				for (int i = 0, n = snakeHead; i < snakeLen; ++i) {
+					updateMap(snake[n], T_EMPTY);
+					n = (n - 1) & 15;
+				}
+			}
+			break;
+		}
+	}
+}
+
 
 
 void setUpdateFn(UDFN fn) {
@@ -295,18 +344,25 @@ int checkFall() {
 			return 1;
 		} 
 
+		// if any segment is supported by something other than air, spikes or another segment then nothing to do
+		if (map[snake[n] + 16] > T_SPIKES && map[snake[n] + 16] < T_SNAKEBOD1)
+			return 0;
+
+		n = (n + 1) & 15;
+	}
+
+	// we would be falling so check for hazards
+
+	for (int i = 0, n = snakeTail; i < snakeLen; ++i) {
 		// if any segment would go into spikes then die
 		if (map[snake[n] + 16] == T_SPIKES) {
 			setUpdateFn(death);
 			return 1;
 		} 
 
-		// if any segment is supported by something other than yourself then nothing to do
-		if (map[snake[n] + 16] > 0 && map[snake[n] + 16] < T_SNAKEBOD1)
-			return 0;
-
 		n = (n + 1) & 15;
 	}
+
 
 	// none of the segments are supported so move them all down
 	for (int i = 0, n = snakeTail; i < snakeLen; ++i) {
