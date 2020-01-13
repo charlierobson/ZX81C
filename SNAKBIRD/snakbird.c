@@ -37,6 +37,7 @@ enum {
 	T_EMPTY,
 
 	T_GROUND1,
+	T_SPIKES,
 
 	T_FRUIT1,
 	T_DOORCLOSED,
@@ -60,6 +61,7 @@ int tileMap[] = {
 	0,0,0,0,				// air
 
 	0x8a,0x8a,0x80,0x80,	// ground
+	0x17,0x17,0x17,0x17,	// spikes
 
 	0x81,0x82,0x84,0x07,	// 'fruit'
 	0x87,0x04,0x02,0x01,	// door, closed
@@ -88,6 +90,7 @@ int tileMap[] = {
 #define F T_FRUIT1
 #define M T_GROUND1
 #define X T_DOORCLOSED
+#define V T_SPIKES
 
 const int MAPSIZE = 16*12;
 
@@ -98,7 +101,7 @@ byte gameMap[] = {
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 	0,0,0,0,0,0,0,0,F,0,0,0,0,0,0,0,
-	0,0,0,0,M,M,M,M,0,0,0,0,0,0,0,0,
+	0,0,V,0,M,M,M,M,0,0,0,0,0,0,0,0,
 	0,0,0,0,0,0,0,0,0,0,0,0,0,X,0,0,
 	0,0,0,0,0,0,C,B,A,0,0,0,0,0,0,0,
 	0,0,0,0,0,0,M,M,M,M,0,0,0,0,0,0,
@@ -288,6 +291,12 @@ int checkFall() {
 	for (int i = 0, n = snakeTail; i < snakeLen; ++i) {
 		// if any segment would go off screen then die
 		if (snake[n] + 16 >= MAPSIZE) {
+			setUpdateFn(death);
+			return 1;
+		} 
+
+		// if any segment would go into spikes then die
+		if (map[snake[n] + 16] == T_SPIKES) {
 			setUpdateFn(death);
 			return 1;
 		} 
