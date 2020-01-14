@@ -130,7 +130,7 @@ byte _gameMap[] = {
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 	0,0,0,0,F,G,H,0,O,0,0,0,0,0,0,0,
-	0,0,0,0,M,M,M,M,0,V,0,0,0,0,0,0,
+	0,0,0,0,M,M,0,M,0,V,0,0,0,0,0,0,
 	0,0,V,V,V,0,0,0,0,0,0,0,0,X,0,0,
 	0,0,0,0,0,0,C,B,A,0,0,0,0,0,0,0,
 	0,0,0,0,0,0,M,M,M,M,0,0,0,0,0,0,
@@ -167,6 +167,9 @@ byte _gameMap[] = {
 	0xf0,0xff
 };
 
+const int _dirs[] = {
+	-16,1,16,-1
+};
 
 
 void putBlock(int cellId, int tile) {
@@ -367,6 +370,26 @@ int mySegment(snake_t* snake, byte cellContent) {
 }
 
 
+int canMove(snake_t* snake, int direction) {
+	// if any segment would move onto ground then we can't move
+	for (int i = 0, n = snake->tail; i < snake->length; ++i) {
+		if (_map[_dirs[direction] + snake->segs[n]] == T_GROUND1)
+			return 0;
+		n = (n + 1) & 15;
+	}
+	return 1;
+}
+
+
+void moveSnake(snake_t* snake, int direction) {
+	for (int i = 0, n = snake->tail; i < snake->length; ++i) {
+		updateMap(snake->segs[n], T_EMPTY);
+		snake->segs[n] += _dirs[direction];
+		n = (n + 1) & 15;
+	}
+}
+
+
 int checkFall(snake_t* snake) {
 	for (int i = 0, n = snake->tail; i < snake->length; ++i) {
 		// if any segment would go off screen then die
@@ -409,14 +432,23 @@ int checkFall(snake_t* snake) {
 }
 
 
-int tryMove(snake_t* snake, int newDirn) {
-	const int _dirs[] = {
-		-16,1,16,-1
-	};
+snake_t* otherSnake(snake_t* thisSnake) {
+	return thisSnake == &_snake1 ? &_snake2 : &_snake1; 
+}
 
+
+int tryMove(snake_t* snake, int newDirn) {
 	int newMapPos = snake->segs[snake->head] + _dirs[newDirn];
-	if (!isTraversible(_map[newMapPos]))
-		return 0;
+
+	if (!isTraversible(_map[newMapPos])) {
+		if (mySegment(snake, _map[newMapPos]))
+			return 0;
+
+		if (!canMove(otherSnake(snake), newDirn))
+			return 0;
+		
+		moveSnake(otherSnake(snake), newDirn);
+	}
 
 	snake->face = newDirn;
 	snake->head = (snake->head + 1) & 15;
@@ -511,10 +543,10 @@ void reset(int level) {
 	int levelOffset = _level * MAPSIZE;
 	memcpy(_map, _gameMap + levelOffset, MAPSIZE);
 
+	countFruit();
+
 	initialiseSnake(_snake1);
 	initialiseSnake(_snake2);
-
-	countFruit();
 
 	putSnakeInMap(_snake1);
 	if (_snake2.length) putSnakeInMap(_snake2);
@@ -535,8 +567,14 @@ void main()
 	reset(0);
 
 	while(1) {
-		putSnakeInMap(_activeSnake);
+		putSnakeInMap(_snake1);
+		if (_snake2.length) putSnakeInMap(_snake2);
+
 		renderUpdates();
+
+		// zx_setcursorpos(0, 0);
+		// printf("%d  %d  %d  %d  ", canMove(&_snake1, UP), canMove(&_snake1, RIGHT), canMove(&_snake1, DOWN), canMove(&_snake1, LEFT));
+
 		doUpdateFn(_activeSnake);
 	}
 }
