@@ -441,7 +441,8 @@ int tryMove(snake_t* snake, int newDirn) {
 	int newMapPos = snake->segs[snake->head] + _dirs[newDirn];
 
 	if (!isTraversible(_map[newMapPos])) {
-		if (mySegment(snake, _map[newMapPos]))
+		// it's not traversible, check if it's another snake's seg blocking
+		if ((_map[newMapPos] & 0xc0) == 0 || (_map[newMapPos] & 0xc0) == snake->id)
 			return 0;
 
 		if (!canMove(otherSnake(snake), newDirn))
