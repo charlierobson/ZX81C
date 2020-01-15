@@ -288,6 +288,10 @@ void putSnakeInMap(snake_t* snake) {
 }
 
 
+void fnExiting(snake_t*);
+void fnDeath(snake_t*);
+void fnSnakeMove(snake_t*);
+void fnNextLevel(snake_t*);
 
 void setUpdateFn(UDFN fn) {
 	_udTimer = 0;
@@ -295,7 +299,22 @@ void setUpdateFn(UDFN fn) {
 }
 
 
-void nextLevel(void) {
+snake_t* otherSnake(snake_t* thisSnake) {
+	return thisSnake == &_snake1 ? &_snake2 : &_snake1; 
+}
+
+
+snake_t* _activeSnake;
+void swapSnakes() { // hmm is there a bug here waiting to happen? should only call if you *can* swap
+	if (_activeSnake == &_snake1 && !_snake2.isDead) {
+		_activeSnake = &_snake2;
+	} else
+		// active snake is snake 2 or it's snake 1 but snake 2 is dead
+		_activeSnake = &_snake1;
+}
+
+
+void fnNextLevel(snake_t* snake) {
 	++_udTimer;
 	if (_udTimer == 100) {
 		++_level;
@@ -305,7 +324,7 @@ void nextLevel(void) {
 }
 
 
-void death(snake_t* snake) {
+void fnDeath(snake_t* snake) {
 	_snake1.isDead = 1;
 	_snake2.isDead = 1;
 
@@ -315,26 +334,6 @@ void death(snake_t* snake) {
 	}
 }
 
-
-void exiting(snake_t* snake) {
-	int exited = 1;
-
-	// collapse all segments onto the head, counting how many segments are in one place
-	updateMap(snake->segs[snake->tail], T_EMPTY);
-	for (int i = 0; i < snake->length - 1; ++i) {
-		if (snake->segs[(snake->tail + i) & 15] == snake->segs[snake->head]) {
-			++exited;
-		}
-		snake->segs[(snake->tail + i) & 15] = snake->segs[(snake->tail + 1 + i) & 15];
-	}
-
-	if (exited == snake->length) {
-		setUpdateFn(nextLevel);
-		updateMap(snake->segs[snake->head], T_DOORCLOSED);
-	}
-
-	return 1;
-}
 
 
 void countFruit() {
@@ -387,15 +386,6 @@ int canMove(snake_t* snake, int direction) {
 }
 
 
-void moveSnake(snake_t* snake, int direction) {
-	for (int i = 0, n = snake->tail; i < snake->length; ++i) {
-		updateMap(snake->segs[n], T_EMPTY);
-		snake->segs[n] += _dirs[direction];
-		n = (n + 1) & 15;
-	}
-}
-
-
 int checkFall(snake_t* snake) {
 	if (snake->isDead)
 		return 0;
@@ -403,7 +393,7 @@ int checkFall(snake_t* snake) {
 	for (int i = 0, n = snake->tail; i < snake->length; ++i) {
 		// if any segment would go off screen then die
 		if (snake->segs[n] + 16 >= MAPSIZE) {
-			setUpdateFn(death);
+			setUpdateFn(fnDeath);
 			return 1;
 		} 
 
@@ -422,7 +412,7 @@ int checkFall(snake_t* snake) {
 	for (int i = 0, n = snake->tail; i < snake->length; ++i) {
 		// if any segment would go into spikes then die
 		if (_map[snake->segs[n] + 16] == T_SPIKES) {
-			setUpdateFn(death);
+			setUpdateFn(fnDeath);
 			return 1;
 		} 
 
@@ -441,8 +431,12 @@ int checkFall(snake_t* snake) {
 }
 
 
-snake_t* otherSnake(snake_t* thisSnake) {
-	return thisSnake == &_snake1 ? &_snake2 : &_snake1; 
+void moveSnake(snake_t* snake, int direction) {
+	for (int i = 0, n = snake->tail; i < snake->length; ++i) {
+		updateMap(snake->segs[n], T_EMPTY);
+		snake->segs[n] += _dirs[direction];
+		n = (n + 1) & 15;
+	}
 }
 
 
@@ -475,7 +469,7 @@ int tryMove(snake_t* snake, int newDirn) {
 		++snake->length;
 		--_fruitCount;
 	} else if (_map[newMapPos] == T_DOOROPEN)
-		setUpdateFn(exiting);
+		setUpdateFn(fnExiting);
 
 	if (!_doorIsOpen && !_fruitCount) {
 		openDoor();
@@ -484,17 +478,8 @@ int tryMove(snake_t* snake, int newDirn) {
 	return 1;
 }
 
-snake_t* _activeSnake;
-void swapSnakes() {
-	if (_activeSnake == &_snake1 && !_snake2.isDead != 0) {
-		_activeSnake = &_snake2;
-	} else
-		_activeSnake = &_snake1;
-}
 
-
-
-void snakeMove(snake_t* snake) {
+void fnSnakeMove(snake_t* snake) {
 	if (checkFall(&_snake1) || checkFall(&_snake2))
 		return;
 
@@ -515,6 +500,35 @@ void snakeMove(snake_t* snake) {
 		if (k == K_RESET) return reset(_level);
 		if (k == K_SWAP) return swapSnakes();
 	}
+}
+
+
+void fnExiting(snake_t* snake) {
+	int exited = 1;
+
+	// collapse all segments onto the head, counting how many segments are in one place
+	updateMap(snake->segs[snake->tail], T_EMPTY);
+	for (int i = 0; i < snake->length - 1; ++i) {
+		if (snake->segs[(snake->tail + i) & 15] == snake->segs[snake->head]) {
+			++exited;
+		}
+		snake->segs[(snake->tail + i) & 15] = snake->segs[(snake->tail + 1 + i) & 15];
+	}
+
+	if (exited == snake->length) {
+		snake->length = 0;
+		snake->isDead = 1;
+		updateMap(snake->segs[snake->head], T_DOOROPEN);
+
+		if (otherSnake(snake)->isDead) {
+			setUpdateFn(fnNextLevel);
+		} else {
+			swapSnakes();
+			setUpdateFn(fnSnakeMove);
+		}
+	}
+
+	return 1;
 }
 
 
@@ -548,7 +562,7 @@ void reset(int level) {
 
 	_activeSnake = &_snake1;
 
-	setUpdateFn(snakeMove);
+	setUpdateFn(fnSnakeMove);
 
 	int levelOffset = _level * MAPSIZE;
 	memcpy(_map, _gameMap + levelOffset, MAPSIZE);
