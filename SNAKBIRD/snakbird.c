@@ -130,9 +130,9 @@ byte _gameMap[] = {
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 	0,0,0,0,F,G,H,0,O,0,0,0,0,0,0,0,
-	0,0,0,0,M,M,0,M,0,V,0,0,0,0,0,0,
-	0,0,V,V,V,0,0,0,0,0,0,0,0,X,0,0,
-	0,0,0,0,0,0,C,B,A,0,0,0,0,0,0,0,
+	0,0,V,V,M,M,0,M,0,M,0,0,0,0,0,0,
+	0,0,V,V,V,0,0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,C,B,A,0,0,0,X,0,0,0,
 	0,0,0,0,0,0,M,M,M,M,0,0,0,0,0,0,
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
@@ -518,13 +518,14 @@ void fnExiting(snake_t* snake) {
 	if (exited == snake->length) {
 		snake->length = 0;
 		snake->isDead = 1;
-		updateMap(snake->segs[snake->head], T_DOOROPEN);
 
 		if (otherSnake(snake)->isDead) {
 			setUpdateFn(fnNextLevel);
+			updateMap(snake->segs[snake->head], T_DOORCLOSED);
 		} else {
 			swapSnakes();
 			setUpdateFn(fnSnakeMove);
+			updateMap(snake->segs[snake->head], T_DOOROPEN);
 		}
 	}
 
