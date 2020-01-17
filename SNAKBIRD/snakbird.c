@@ -318,12 +318,13 @@ snake_t* otherSnake(snake_t* thisSnake) {
 
 
 snake_t* _activeSnake;
-void swapSnakes() { // hmm is there a bug here waiting to happen? should only call if you *can* swap
-	if (_activeSnake == &_snake1 && !_snake2.isDead) {
+void swapSnakes() {
+	if (_activeSnake == &_snake1 && !_snake2.isDead)
 		_activeSnake = &_snake2;
-	} else
-		// active snake is snake 2 or it's snake 1 but snake 2 is dead
+	else if (_activeSnake == &_snake2 && !_snake1.isDead)
 		_activeSnake = &_snake1;
+
+	// else do nothing
 }
 
 
