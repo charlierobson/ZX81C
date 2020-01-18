@@ -85,7 +85,7 @@ int _tileMap[] = {
 	0x07,0x84,0x82,0x81,	// door, open
 
 	// snakes
-	0x08,0x08,0x08,0x08,	// snakebod
+	0x80,0x80,0x80,0x80, //	0x08,0x08,0x08,0x08,	// snakebod
 	0x80,0x80,0x80,0x80,
 
 	0x9b,0x82,0x80,0x80,	// face up
@@ -346,7 +346,6 @@ void putSnakeInMap(snake_t* snake) {
 
 void fnExiting(snake_t*);
 void fnDeath(snake_t*);
-void fnFlashSnake(snake_t*);
 void fnSnakeMove(snake_t*);
 void fnNextLevel(snake_t*);
 
@@ -390,19 +389,6 @@ void fnDeath(snake_t* snake) {
 	if (_udTimer == 100) {
 		reset(_level);
 	}
-}
-
-
-void fnFlashSnake(snake_t* snake) {
-	++_udTimer;
-	if (_udTimer & 1) {
-		snake->length |= 0x80;
-	}
-	else
-		snake->length &= 0x7f;
-
-	if (_udTimer == 10)
-		setUpdateFn(fnSnakeMove);
 }
 
 
@@ -646,7 +632,7 @@ void reset(int level) {
 
 	renderMap();
 
-	setUpdateFn(fnFlashSnake);
+	setUpdateFn(fnSnakeMove);
 }
 
 
