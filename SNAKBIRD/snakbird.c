@@ -37,6 +37,7 @@ typedef struct {
 
 snake_t _snake1;
 snake_t _snake2;
+snake_t* _activeSnake;
 
 typedef void(*UDFN)(snake_t*);
 
@@ -66,6 +67,10 @@ enum {
 	T_DEADFACERIGHT,
 	T_DEADFACEDOWN,
 	T_DEADFACELEFT,
+	T_SLEEPFACEUP,
+	T_SLEEPFACERIGHT,
+	T_SLEEPFACEDOWN,
+	T_SLEEPFACELEFT,
 	T_BODDEAD1,
 	T_BODDEAD2,
 
@@ -85,7 +90,7 @@ int _tileMap[] = {
 	0x07,0x84,0x82,0x81,	// door, open
 
 	// snakes
-	0x80,0x80,0x80,0x80, //	0x08,0x08,0x08,0x08,	// snakebod
+	0x08,0x08,0x08,0x08,	// snakebod
 	0x80,0x80,0x80,0x80,
 
 	0x9b,0x82,0x80,0x80,	// face up
@@ -97,6 +102,11 @@ int _tileMap[] = {
 	0x80,0xbd,0x80,0x07,	// face right dead
 	0x80,0x80,0xbd,0x07,	// face down dead
 	0xbd,0x80,0x84,0x80,	// face left dead
+
+	0x96,0x82,0x80,0x80,	// face up asleep
+	0x80,0x96,0x80,0x07,	// face right asleep
+	0x80,0x80,0x96,0x07,	// face down asleep
+	0x96,0x80,0x84,0x80,	// face left asleep
 
 	0x17,0x17,0x17,0x17,	// bod dead 1
 	0x1b,0x1b,0x1b,0x1b,	// bod dead 2
@@ -294,10 +304,14 @@ void putSnakeInMap(snake_t* snake) {
 		return;
 
 	if (!snake->isDead) {
-		updateMap(snake->segs[snake->head], snake->id + snake->face + T_FACEUP);
+		byte x = snake->id == 0x80 ? 1 : 0;
+		if (snake == _activeSnake)
+			updateMap(snake->segs[snake->head], snake->id + snake->face + T_FACEUP);
+		else
+			updateMap(snake->segs[snake->head], snake->id + snake->face + T_SLEEPFACEUP);
 		for (int i = 1, n = snake->head; i < snake->length; ++i) {
 			n = (n - 1) & 15;
-			updateMap(snake->segs[n], snake->id + T_SNAKEBOD2 - (i & 1));
+			updateMap(snake->segs[n], snake->id + T_SNAKEBOD1 + x);
 		}
 	} else {
 		int phase = _udTimer / 10;
@@ -309,9 +323,10 @@ void putSnakeInMap(snake_t* snake) {
 			{
 				int x = snake->isDead ? T_DEADFACEUP : T_FACEUP;
 				updateMap(snake->segs[snake->head], snake->face + x);
+				x = snake->id == 0x80 ? 1 : 0;
 				for (int i = 1, n = snake->head; i < snake->length; ++i) {
 					n = (n - 1) & 15;
-					updateMap(snake->segs[n], T_SNAKEBOD2 - (i & 1));
+					updateMap(snake->segs[n], snake->id + T_SNAKEBOD1 + x);
 				}
 			}
 			break;
@@ -360,7 +375,6 @@ snake_t* otherSnake(snake_t* thisSnake) {
 }
 
 
-snake_t* _activeSnake;
 void swapSnakes() {
 	if (_activeSnake == &_snake1 && !_snake2.isDead)
 		_activeSnake = &_snake2;
